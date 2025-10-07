@@ -161,8 +161,6 @@ def pause_monitor(monitor_id: int, session: Session = Depends(get_session)) -> M
 
     now = datetime.now(timezone.utc)
     monitor.enabled = False
-    monitor.disabled_at = now
-    monitor.next_run_at = None
     monitor.updated_at = now
 
     session.add(monitor)
@@ -181,7 +179,6 @@ def resume_monitor(monitor_id: int, session: Session = Depends(get_session)) -> 
 
     now = datetime.now(timezone.utc)
     monitor.enabled = True
-    monitor.disabled_at = None
     monitor.next_run_at = now
     monitor.updated_at = now
 
