@@ -1,0 +1,69 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: monitron
+      POSTGRES_USER: monitron
+      POSTGRES_PASSWORD: monitron
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U monitron"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  api:
+    build:
+      context: ./services/api
+    environment:
+      DATABASE_URL: postgresql+psycopg2://monitron:monitron@db:5432/monitron
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: super-secret-jwt-key
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./services/api/app:/app/app:ro
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+
+  worker:
+    build:
+      context: ./services/worker
+    environment:
+      DATABASE_URL: postgresql+psycopg2://monitron:monitron@db:5432/monitron
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./services/worker/app:/app/app:ro
+
+  web:
+    build:
+      context: ./web
+      target: dev
+    environment:
+      VITE_API_BASE_URL: /api/v1
+      VITE_API_PROXY_TARGET: http://api:8080
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
