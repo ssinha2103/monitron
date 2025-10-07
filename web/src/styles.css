@@ -352,6 +352,11 @@ button {
   color: #a12f2f;
 }
 
+.status-chip.paused {
+  background: rgba(136, 148, 170, 0.2);
+  color: #4f5b6d;
+}
+
 .status-chip.idle {
   background: rgba(210, 216, 229, 0.4);
   color: #4a5263;

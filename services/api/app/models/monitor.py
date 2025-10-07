@@ -19,7 +19,7 @@ class Monitor(SQLModel, table=True):
     timeout_seconds: int = Field(default=10, ge=1, le=60)
     enabled: bool = Field(default=True)
 
-    next_run_at: datetime = Field(default_factory=utcnow, index=True)
+    next_run_at: datetime | None = Field(default_factory=utcnow, index=True)
     last_checked_at: Optional[datetime] = None
     last_status_code: Optional[int] = None
     last_latency_ms: Optional[int] = None
@@ -28,6 +28,7 @@ class Monitor(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+    disabled_at: datetime | None = None
 
 
 class MonitorCheck(SQLModel, table=True):

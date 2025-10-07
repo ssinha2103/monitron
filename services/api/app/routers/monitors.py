@@ -151,10 +151,41 @@ def update_monitor(monitor_id: int, payload: MonitorUpdate, session: Session = D
     return monitor
 
 
-@router.delete("/{monitor_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_monitor(monitor_id: int, session: Session = Depends(get_session)) -> None:
+@router.delete("/{monitor_id}", response_model=MonitorRead)
+def pause_monitor(monitor_id: int, session: Session = Depends(get_session)) -> Monitor:
     monitor = session.get(Monitor, monitor_id)
     if not monitor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Monitor not found")
-    session.delete(monitor)
+    if not monitor.enabled:
+        return monitor
+
+    now = datetime.now(timezone.utc)
+    monitor.enabled = False
+    monitor.disabled_at = now
+    monitor.next_run_at = None
+    monitor.updated_at = now
+
+    session.add(monitor)
     session.commit()
+    session.refresh(monitor)
+    return monitor
+
+
+@router.post("/{monitor_id}/resume", response_model=MonitorRead)
+def resume_monitor(monitor_id: int, session: Session = Depends(get_session)) -> Monitor:
+    monitor = session.get(Monitor, monitor_id)
+    if not monitor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Monitor not found")
+    if monitor.enabled:
+        return monitor
+
+    now = datetime.now(timezone.utc)
+    monitor.enabled = True
+    monitor.disabled_at = None
+    monitor.next_run_at = now
+    monitor.updated_at = now
+
+    session.add(monitor)
+    session.commit()
+    session.refresh(monitor)
+    return monitor

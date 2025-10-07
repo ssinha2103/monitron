@@ -21,6 +21,7 @@ def get_due_monitors(session: Session, limit: int = 50) -> List[Monitor]:
     statement = (
         select(Monitor)
         .where(Monitor.enabled.is_(True))
+        .where(Monitor.next_run_at.is_not(None))
         .where(Monitor.next_run_at <= utcnow())
         .order_by(Monitor.next_run_at)
         .limit(limit)
@@ -94,7 +95,10 @@ def update_monitor_state(
         else:
             db_monitor.consecutive_failures += 1
 
-        db_monitor.next_run_at = schedule_next_run(db_monitor)
+        if db_monitor.enabled:
+            db_monitor.next_run_at = schedule_next_run(db_monitor)
+        else:
+            db_monitor.next_run_at = None
         check_entry = MonitorCheck(
             monitor_id=db_monitor.id,
             occurred_at=utcnow(),

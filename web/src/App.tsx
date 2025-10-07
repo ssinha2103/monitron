@@ -177,6 +177,7 @@ export default function App(): JSX.Element {
 
   const handleMonitorClick = (monitorId: number) => {
     setSelectedMonitorId(monitorId);
+    setExpandedCheckId(null);
   };
 
   const closeDetail = () => {
@@ -198,6 +199,7 @@ export default function App(): JSX.Element {
         if (!response.ok) throw new Error(await response.text());
         const data: MonitorCheck[] = await response.json();
         setChecks(data);
+        setExpandedCheckId(data.length > 0 ? data[0].id : null);
       } catch (err) {
         console.error(err);
         setChecksError('Unable to load recent check results.');
@@ -210,7 +212,10 @@ export default function App(): JSX.Element {
   }, [selectedMonitorId]);
 
   const triggerManualRun = async () => {
-    if (!selectedMonitorId) return;
+    if (!selectedMonitorId || !selectedMonitor?.enabled) {
+      showToast('Monitor is paused', 'error');
+      return;
+    }
     setRunPending(true);
     try {
       const response = await fetch(`${API_BASE_URL}/monitors/${selectedMonitorId}/run`, {
@@ -233,18 +238,32 @@ export default function App(): JSX.Element {
     }
   };
 
-  const handleDelete = async (monitorId: number) => {
-    if (!window.confirm('Remove this monitor?')) return;
+  const handlePause = async (monitorId: number) => {
+    if (!window.confirm('Pause this monitor?')) return;
     try {
       const response = await fetch(`${API_BASE_URL}/monitors/${monitorId}`, {
         method: 'DELETE'
       });
       if (!response.ok) throw new Error(await response.text());
-      showToast('Monitor removed', 'success');
-      void fetchMonitors();
+      showToast('Monitor paused', 'success');
+      await fetchMonitors();
     } catch (err) {
       console.error(err);
-      showToast('Failed to delete monitor', 'error');
+      showToast('Failed to pause monitor', 'error');
+    }
+  };
+
+  const handleResume = async (monitorId: number) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/monitors/${monitorId}/resume`, {
+        method: 'POST'
+      });
+      if (!response.ok) throw new Error(await response.text());
+      showToast('Monitor resumed', 'success');
+      await fetchMonitors();
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to resume monitor', 'error');
     }
   };
 
@@ -443,16 +462,20 @@ export default function App(): JSX.Element {
                     <span className="url">{monitor.url}</span>
                     <span className="status-chip-row">
                       <span
-                      className={classNames(
-                        'status-chip',
-                        monitor.last_outcome === 'up'
-                          ? 'up'
-                          : monitor.last_outcome === 'down'
-                          ? 'down'
-                          : 'idle'
-                      )}
+                        className={classNames(
+                          'status-chip',
+                          !monitor.enabled
+                            ? 'paused'
+                            : monitor.last_outcome === 'up'
+                            ? 'up'
+                            : monitor.last_outcome === 'down'
+                            ? 'down'
+                            : 'idle'
+                        )}
                       >
-                        {monitor.last_outcome === 'up'
+                        {!monitor.enabled
+                          ? 'Paused'
+                          : monitor.last_outcome === 'up'
                           ? 'Operational'
                           : monitor.last_outcome === 'down'
                           ? 'Down'
@@ -462,7 +485,11 @@ export default function App(): JSX.Element {
                   </div>
                   <div className="monitor-meta">
                     <span>Last check</span>
-                    <strong>{formatRelativeTime(monitor.last_checked_at)}</strong>
+                    <strong>
+                      {!monitor.enabled && monitor.last_checked_at == null
+                        ? 'Paused'
+                        : formatRelativeTime(monitor.last_checked_at)}
+                    </strong>
                   </div>
                   <div className="monitor-meta">
                     <span>Latency</span>
@@ -476,10 +503,14 @@ export default function App(): JSX.Element {
                       className="ghost-button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        handleDelete(monitor.id);
+                        if (monitor.enabled) {
+                          void handlePause(monitor.id);
+                        } else {
+                          void handleResume(monitor.id);
+                        }
                       }}
                     >
-                      Remove
+                      {monitor.enabled ? 'Pause' : 'Resume'}
                     </button>
                   </div>
                 </motion.div>
@@ -531,7 +562,11 @@ export default function App(): JSX.Element {
                   <p>{selectedMonitor.url}</p>
                 </div>
                 <div className="detail-actions">
-                  <button className="ghost-button" onClick={triggerManualRun} disabled={runPending}>
+                  <button
+                    className="ghost-button"
+                    onClick={triggerManualRun}
+                    disabled={runPending || !selectedMonitor.enabled}
+                  >
                     {runPending ? 'Running...' : 'Run check now'}
                   </button>
                   <button className="ghost-button" onClick={closeDetail}>
@@ -545,14 +580,18 @@ export default function App(): JSX.Element {
                   <span
                     className={classNames(
                       'status-chip',
-                      selectedMonitor.last_outcome === 'up'
+                      !selectedMonitor.enabled
+                        ? 'paused'
+                        : selectedMonitor.last_outcome === 'up'
                         ? 'up'
                         : selectedMonitor.last_outcome === 'down'
                         ? 'down'
                         : 'idle'
                     )}
                   >
-                    {selectedMonitor.last_outcome === 'up'
+                    {!selectedMonitor.enabled
+                      ? 'Paused'
+                      : selectedMonitor.last_outcome === 'up'
                       ? 'Operational'
                       : selectedMonitor.last_outcome === 'down'
                       ? 'Down'
@@ -561,7 +600,11 @@ export default function App(): JSX.Element {
                 </div>
                 <div className="detail-metric">
                   <span className="metric-label">Last check</span>
-                  <strong>{formatDateTime(selectedMonitor.last_checked_at)}</strong>
+                  <strong>
+                    {!selectedMonitor.enabled && selectedMonitor.last_checked_at == null
+                      ? 'Paused'
+                      : formatDateTime(selectedMonitor.last_checked_at)}
+                  </strong>
                 </div>
                 <div className="detail-metric">
                   <span className="metric-label">Latency</span>
@@ -573,7 +616,9 @@ export default function App(): JSX.Element {
                 </div>
                 <div className="detail-metric">
                   <span className="metric-label">Next run</span>
-                  <strong>{formatDateTime(selectedMonitor.next_run_at)}</strong>
+                  <strong>
+                    {!selectedMonitor.enabled ? 'Paused' : formatDateTime(selectedMonitor.next_run_at)}
+                  </strong>
                 </div>
               </div>
 

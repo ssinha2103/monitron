@@ -42,7 +42,7 @@ class MonitorUpdate(BaseModel):
 
 class MonitorRead(MonitorBase):
     id: int
-    next_run_at: datetime
+    next_run_at: Optional[datetime] = None
     last_checked_at: Optional[datetime] = None
     last_status_code: Optional[int] = None
     last_latency_ms: Optional[int] = None
@@ -50,6 +50,7 @@ class MonitorRead(MonitorBase):
     consecutive_failures: int
     created_at: datetime
     updated_at: datetime
+    disabled_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
