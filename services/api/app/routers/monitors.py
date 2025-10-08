@@ -4,24 +4,40 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
+from app.core.dependencies import get_current_user
 from app.db.session import get_session
-from app.models.monitor import Monitor, MonitorCheck
-from app.schemas.monitor import MonitorCheckRead, MonitorCreate, MonitorRead, MonitorUpdate
+from app.models import Monitor, MonitorCheck, User
+from app.schemas import MonitorCheckRead, MonitorCreate, MonitorRead, MonitorUpdate
 
 router = APIRouter(prefix="/monitors", tags=["Monitors"])
+
+
+def _ensure_access(monitor: Monitor, user: User) -> None:
+    if user.role != "admin" and monitor.owner_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not permitted for this monitor")
 
 
 # Support both /monitors and /monitors/ without redirect
 @router.get("/", response_model=list[MonitorRead])
 @router.get("", response_model=list[MonitorRead], include_in_schema=False)
-def list_monitors(session: Session = Depends(get_session)) -> list[Monitor]:
-    monitors = session.exec(select(Monitor).order_by(Monitor.id)).all()
+def list_monitors(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[Monitor]:
+    statement = select(Monitor).order_by(Monitor.id)
+    if current_user.role != "admin":
+        statement = statement.where(Monitor.owner_id == current_user.id)
+    monitors = session.exec(statement).all()
     return monitors
 
 
 @router.post("/", response_model=MonitorRead, status_code=status.HTTP_201_CREATED)
 @router.post("", response_model=MonitorRead, status_code=status.HTTP_201_CREATED, include_in_schema=False)
-def create_monitor(payload: MonitorCreate, session: Session = Depends(get_session)) -> Monitor:
+def create_monitor(
+    payload: MonitorCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> Monitor:
     monitor = Monitor(
         name=payload.name,
         url=str(payload.url),
@@ -29,6 +45,7 @@ def create_monitor(payload: MonitorCreate, session: Session = Depends(get_sessio
         interval_seconds=payload.interval_seconds,
         timeout_seconds=payload.timeout_seconds,
         enabled=payload.enabled,
+        owner_id=current_user.id,
     )
     session.add(monitor)
     session.commit()
@@ -37,10 +54,15 @@ def create_monitor(payload: MonitorCreate, session: Session = Depends(get_sessio
 
 
 @router.get("/{monitor_id}", response_model=MonitorRead)
-def get_monitor(monitor_id: int, session: Session = Depends(get_session)) -> Monitor:
+def get_monitor(
+    monitor_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> Monitor:
     monitor = session.get(Monitor, monitor_id)
     if not monitor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Monitor not found")
+    _ensure_access(monitor, current_user)
     return monitor
 
 
@@ -53,6 +75,7 @@ def get_monitor_checks(
     monitor_id: int,
     limit: int = 25,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> list[MonitorCheck]:
     if limit <= 0 or limit > 200:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="limit must be between 1 and 200")
@@ -60,6 +83,8 @@ def get_monitor_checks(
     monitor = session.get(Monitor, monitor_id)
     if not monitor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Monitor not found")
+
+    _ensure_access(monitor, current_user)
 
     statement = (
         select(MonitorCheck)
@@ -79,12 +104,14 @@ def get_monitor_checks(
 async def run_monitor_check(
     monitor_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> MonitorCheck:
     monitor = session.get(Monitor, monitor_id)
     if not monitor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Monitor not found")
     if not monitor.enabled:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Monitor is disabled")
+    _ensure_access(monitor, current_user)
 
     timeout = httpx.Timeout(timeout=monitor.timeout_seconds)
     status_code: int | None = None
@@ -132,10 +159,16 @@ async def run_monitor_check(
 
 
 @router.put("/{monitor_id}", response_model=MonitorRead)
-def update_monitor(monitor_id: int, payload: MonitorUpdate, session: Session = Depends(get_session)) -> Monitor:
+def update_monitor(
+    monitor_id: int,
+    payload: MonitorUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> Monitor:
     monitor = session.get(Monitor, monitor_id)
     if not monitor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Monitor not found")
+    _ensure_access(monitor, current_user)
 
     data = payload.model_dump(exclude_unset=True)
     if "url" in data:
@@ -152,12 +185,17 @@ def update_monitor(monitor_id: int, payload: MonitorUpdate, session: Session = D
 
 
 @router.delete("/{monitor_id}", response_model=MonitorRead)
-def pause_monitor(monitor_id: int, session: Session = Depends(get_session)) -> Monitor:
+def pause_monitor(
+    monitor_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> Monitor:
     monitor = session.get(Monitor, monitor_id)
     if not monitor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Monitor not found")
     if not monitor.enabled:
         return monitor
+    _ensure_access(monitor, current_user)
 
     now = datetime.now(timezone.utc)
     monitor.enabled = False
@@ -170,12 +208,17 @@ def pause_monitor(monitor_id: int, session: Session = Depends(get_session)) -> M
 
 
 @router.post("/{monitor_id}/resume", response_model=MonitorRead)
-def resume_monitor(monitor_id: int, session: Session = Depends(get_session)) -> Monitor:
+def resume_monitor(
+    monitor_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> Monitor:
     monitor = session.get(Monitor, monitor_id)
     if not monitor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Monitor not found")
     if monitor.enabled:
         return monitor
+    _ensure_access(monitor, current_user)
 
     now = datetime.now(timezone.utc)
     monitor.enabled = True

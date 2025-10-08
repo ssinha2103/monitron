@@ -1,690 +1,92 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, BrowserRouter } from 'react-router-dom';
 
-type Monitor = {
-  id: number;
-  name: string;
-  url: string;
-  method: string;
-  interval_seconds: number;
-  timeout_seconds: number;
-  enabled: boolean;
-  last_checked_at: string | null;
-  last_status_code: number | null;
-  last_latency_ms: number | null;
-  last_outcome: 'up' | 'down' | null;
-  consecutive_failures: number;
-  next_run_at: string;
-};
+import { AuthProvider, useAuth } from './context/AuthContext';
+import DashboardPage from './pages/DashboardPage';
+import AdminPage from './pages/AdminPage';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
-type Toast = {
-  id: number;
-  message: string;
-  tone?: 'default' | 'success' | 'error';
-};
+function ProtectedRoute({ admin }: { admin?: boolean }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
 
-type MonitorCheck = {
-  id: number;
-  monitor_id: number;
-  occurred_at: string;
-  outcome: string;
-  status_code: number | null;
-  latency_ms: number | null;
-  error_message: string | null;
-};
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
-
-type MonitorFormState = {
-  name: string;
-  url: string;
-  method: string;
-  interval_seconds: number;
-  timeout_seconds: number;
-};
-
-const defaultFormState: MonitorFormState = {
-  name: '',
-  url: '',
-  method: 'GET',
-  interval_seconds: 60,
-  timeout_seconds: 10
-};
-
-function ensureUtcSuffix(value: string): string {
-  if (value.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(value)) {
-    return value;
+  if (loading) {
+    return <div className="empty-state">Loading…</div>;
   }
-  return `${value}Z`;
+
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (admin && user.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return <Outlet />;
 }
 
-function parseDate(dateString: string | null): Date | null {
-  if (!dateString) return null;
-  const normalized = ensureUtcSuffix(dateString);
-  const parsed = new Date(normalized);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
+function AppLayout() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
-function formatRelativeTime(dateString: string | null): string {
-  const parsed = parseDate(dateString);
-  if (!parsed) return 'Not yet checked';
-  const diffMs = Date.now() - parsed.getTime();
-  if (diffMs < 0) return 'Scheduled';
-
-  const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-function formatDateTime(dateString: string | null): string {
-  const parsed = parseDate(dateString);
-  if (!parsed) return '—';
-  return parsed.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
-}
-
-function classNames(...tokens: Array<string | false | null | undefined>): string {
-  return tokens.filter(Boolean).join(' ');
-}
-
-export default function App(): JSX.Element {
-  const [monitors, setMonitors] = useState<Monitor[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [formState, setFormState] = useState<MonitorFormState>(defaultFormState);
-  const [toast, setToast] = useState<Toast | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedMonitorId, setSelectedMonitorId] = useState<number | null>(null);
-  const [checks, setChecks] = useState<MonitorCheck[]>([]);
-  const [checksLoading, setChecksLoading] = useState(false);
-  const [checksError, setChecksError] = useState<string | null>(null);
-  const [runPending, setRunPending] = useState(false);
-  const [expandedCheckId, setExpandedCheckId] = useState<number | null>(null);
-
-  const showToast = (message: string, tone: Toast['tone'] = 'default'): void => {
-    const id = Date.now();
-    setToast({ id, message, tone });
-    setTimeout(() => {
-      setToast((current) => (current?.id === id ? null : current));
-    }, 4000);
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
   };
-
-  const fetchMonitors = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/monitors`);
-      if (!response.ok) throw new Error(await response.text());
-      const data: Monitor[] = await response.json();
-      setMonitors(data);
-    } catch (err) {
-      console.error(err);
-      setError('Unable to load monitors. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const selectedMonitor = useMemo(
-    () => monitors.find((monitor) => monitor.id === selectedMonitorId) ?? null,
-    [monitors, selectedMonitorId]
-  );
-
-  useEffect(() => {
-    void fetchMonitors();
-    const interval = setInterval(() => {
-      void fetchMonitors();
-    }, 15_000);
-    return () => clearInterval(interval);
-  }, [fetchMonitors]);
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    try {
-      const response = await fetch(`${API_BASE_URL}/monitors`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formState)
-      });
-
-      if (!response.ok) {
-        const body = await response.json();
-        throw new Error(body.detail ?? 'Failed to create monitor');
-      }
-
-      showToast('Monitor created', 'success');
-      setFormState({ ...defaultFormState });
-      await fetchMonitors();
-    } catch (err) {
-      console.error(err);
-      showToast(err instanceof Error ? err.message : 'Failed to create monitor', 'error');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleMonitorClick = (monitorId: number) => {
-    setSelectedMonitorId(monitorId);
-    setExpandedCheckId(null);
-  };
-
-  const closeDetail = () => {
-    setSelectedMonitorId(null);
-    setChecks([]);
-    setChecksError(null);
-    setChecksLoading(false);
-    setExpandedCheckId(null);
-  };
-
-  useEffect(() => {
-    if (selectedMonitorId == null) return;
-
-    const fetchChecks = async () => {
-      setChecksLoading(true);
-      setChecksError(null);
-      try {
-        const response = await fetch(`${API_BASE_URL}/monitors/${selectedMonitorId}/checks?limit=40`);
-        if (!response.ok) throw new Error(await response.text());
-        const data: MonitorCheck[] = await response.json();
-        setChecks(data);
-        setExpandedCheckId(data.length > 0 ? data[0].id : null);
-      } catch (err) {
-        console.error(err);
-        setChecksError('Unable to load recent check results.');
-      } finally {
-        setChecksLoading(false);
-      }
-    };
-
-    void fetchChecks();
-  }, [selectedMonitorId]);
-
-  const triggerManualRun = async () => {
-    if (!selectedMonitorId || !selectedMonitor?.enabled) {
-      showToast('Monitor is paused', 'error');
-      return;
-    }
-    setRunPending(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/monitors/${selectedMonitorId}/run`, {
-        method: 'POST'
-      });
-      if (!response.ok) {
-        const body = await response.json();
-        throw new Error(body.detail ?? 'Failed to run check');
-      }
-      const result: MonitorCheck = await response.json();
-      showToast('Check executed', 'success');
-      setChecks((prev) => [result, ...prev]);
-      setExpandedCheckId(result.id);
-      await fetchMonitors();
-    } catch (err) {
-      console.error(err);
-      showToast(err instanceof Error ? err.message : 'Failed to run check', 'error');
-    } finally {
-      setRunPending(false);
-    }
-  };
-
-  const handlePause = async (monitorId: number) => {
-    if (!window.confirm('Pause this monitor?')) return;
-    try {
-      const response = await fetch(`${API_BASE_URL}/monitors/${monitorId}`, {
-        method: 'DELETE'
-      });
-      if (!response.ok) throw new Error(await response.text());
-      showToast('Monitor paused', 'success');
-      await fetchMonitors();
-    } catch (err) {
-      console.error(err);
-      showToast('Failed to pause monitor', 'error');
-    }
-  };
-
-  const handleResume = async (monitorId: number) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/monitors/${monitorId}/resume`, {
-        method: 'POST'
-      });
-      if (!response.ok) throw new Error(await response.text());
-      showToast('Monitor resumed', 'success');
-      await fetchMonitors();
-    } catch (err) {
-      console.error(err);
-      showToast('Failed to resume monitor', 'error');
-    }
-  };
-
-  const stats = useMemo(() => {
-    const total = monitors.length;
-    const up = monitors.filter((m) => m.last_outcome === 'up').length;
-    const down = monitors.filter((m) => m.last_outcome === 'down').length;
-    return { total, up, down };
-  }, [monitors]);
 
   return (
-    <div className="app-shell">
-      <header className="top-bar">
-        <div className="brand">
-          <div className="brand-icon">M</div>
-          <div>
-            <h1 style={{ fontSize: '24px' }}>Monitron Control Center</h1>
-            <p>Monitor your critical endpoints with confidence.</p>
-          </div>
+    <div className="app-frame">
+      <nav className="app-nav">
+        <div className="nav-left">
+          <span className="nav-logo">Monitron</span>
         </div>
-        <div className="top-actions">
-          <button className="pill-button">Docs</button>
-          <button className="pill-button">Activity</button>
-          <button className="pill-button primary">New Monitor</button>
-        </div>
-      </header>
-
-      <section className="dashboard-grid">
-        <div className="summary-card">
-          <span className="summary-header">Monitoring Studio</span>
-          <div className="summary-body">
-            <div>
-              <h2>Uptime Explorer</h2>
-              <p>
-                Track key services across your stack. Automate response when downtime
-                strikes and keep your team informed.
-              </p>
-            </div>
-            <div className="metrics-row">
-              <div className="metric-card">
-                <span className="metric-label">Total Monitors</span>
-                <span className="metric-value">{stats.total}</span>
-              </div>
-              <div className="metric-card">
-                <span className="metric-label">Healthy</span>
-                <span className="metric-value">{stats.up}</span>
-              </div>
-              <div className="metric-card">
-                <span className="metric-label">Investigate</span>
-                <span className="metric-value">{stats.down}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <aside className="actions-card">
-          <span className="summary-header">Quick Actions</span>
-          <button className="action-button primary">Add Monitor</button>
-          <button className="action-button secondary">Import from JSON</button>
-          <button className="action-button ghost">Download Report</button>
-        </aside>
-      </section>
-
-      <section className="monitor-panel">
-        <div className="panel-header">
-          <div>
-            <h2>Active Monitors</h2>
-            <p>Browse, filter, and manage uptime checks with a polished interface.</p>
-          </div>
-          <span className="badge">{stats.total} configured</span>
-        </div>
-
-        <form className="monitor-form" onSubmit={handleSubmit}>
-          <div className="form-grid">
-            <div className="input-field">
-              <label htmlFor="name">Monitor Name</label>
-              <input
-                id="name"
-                placeholder="API Gateway"
-                value={formState.name}
-                onChange={(event) =>
-                  setFormState((prev) => ({ ...prev, name: event.target.value }))
-                }
-                required
-              />
-            </div>
-            <div className="input-field" style={{ gridColumn: 'span 2' }}>
-              <label htmlFor="url">Target URL</label>
-              <input
-                id="url"
-                placeholder="https://api.example.com/health"
-                value={formState.url}
-                onChange={(event) =>
-                  setFormState((prev) => ({ ...prev, url: event.target.value }))
-                }
-                required
-                type="url"
-              />
-            </div>
-            <div className="input-field">
-              <label htmlFor="method">Method</label>
-              <select
-                id="method"
-                value={formState.method}
-                onChange={(event) =>
-                  setFormState((prev) => ({ ...prev, method: event.target.value }))
-                }
-              >
-                <option value="GET">GET</option>
-                <option value="HEAD">HEAD</option>
-                <option value="POST">POST</option>
-              </select>
-            </div>
-            <div className="input-field">
-              <label htmlFor="interval_seconds">Interval (seconds)</label>
-              <input
-                id="interval_seconds"
-                type="number"
-                min={30}
-                value={formState.interval_seconds}
-                onChange={(event) =>
-                  setFormState((prev) => ({
-                    ...prev,
-                    interval_seconds: Number(event.target.value)
-                  }))
-                }
-              />
-            </div>
-            <div className="input-field">
-              <label htmlFor="timeout_seconds">Timeout (seconds)</label>
-              <input
-                id="timeout_seconds"
-                type="number"
-                min={1}
-                max={60}
-                value={formState.timeout_seconds}
-                onChange={(event) =>
-                  setFormState((prev) => ({
-                    ...prev,
-                    timeout_seconds: Number(event.target.value)
-                  }))
-                }
-              />
-            </div>
-          </div>
-          <div className="form-actions">
-            <button
-              className="ghost-button"
-              type="button"
-              onClick={() => setFormState({ ...defaultFormState })}
-            >
-              Reset
+        <div className="nav-right">
+          <button className="nav-link" onClick={() => navigate('/')}>Dashboard</button>
+          {user?.role === 'admin' ? (
+            <button className="nav-link" onClick={() => navigate('/admin')}>
+              Admin
             </button>
-            <button className="pill-button primary" type="submit" disabled={submitting}>
-              {submitting ? 'Creating...' : 'Save Monitor'}
-            </button>
-          </div>
-        </form>
-
-        <div className="form-divider" />
-
-        {error && <div className="empty-state">{error}</div>}
-
-        {loading ? (
-          <div className="empty-state">Loading monitors...</div>
-        ) : monitors.length === 0 ? (
-          <div className="empty-state">
-            No monitors yet. Add your first URL to start uptime tracking.
-          </div>
-        ) : (
-          <div className="monitor-list">
-            <AnimatePresence>
-              {monitors.map((monitor) => (
-                <motion.div
-                  key={monitor.id}
-                  className="monitor-card"
-                  layout
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.18 }}
-                  onClick={() => handleMonitorClick(monitor.id)}
-                >
-                  <div className="monitor-info">
-                    <button
-                      type="button"
-                      className="monitor-name-button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleMonitorClick(monitor.id);
-                      }}
-                    >
-                      <span className="name">{monitor.name}</span>
-                      <span className="view-link">View details</span>
-                    </button>
-                    <span className="url">{monitor.url}</span>
-                    <span className="status-chip-row">
-                      <span
-                        className={classNames(
-                          'status-chip',
-                          !monitor.enabled
-                            ? 'paused'
-                            : monitor.last_outcome === 'up'
-                            ? 'up'
-                            : monitor.last_outcome === 'down'
-                            ? 'down'
-                            : 'idle'
-                        )}
-                      >
-                        {!monitor.enabled
-                          ? 'Paused'
-                          : monitor.last_outcome === 'up'
-                          ? 'Operational'
-                          : monitor.last_outcome === 'down'
-                          ? 'Down'
-                          : 'Pending'}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="monitor-meta">
-                    <span>Last check</span>
-                    <strong>
-                      {!monitor.enabled && monitor.last_checked_at == null
-                        ? 'Paused'
-                        : formatRelativeTime(monitor.last_checked_at)}
-                    </strong>
-                  </div>
-                  <div className="monitor-meta">
-                    <span>Latency</span>
-                    <strong>
-                      {monitor.last_latency_ms != null ? `${monitor.last_latency_ms} ms` : '—'}
-                    </strong>
-                    {monitor.last_status_code && <span>HTTP {monitor.last_status_code}</span>}
-                  </div>
-                  <div className="actions">
-                    <button
-                      className="ghost-button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (monitor.enabled) {
-                          void handlePause(monitor.id);
-                        } else {
-                          void handleResume(monitor.id);
-                        }
-                      }}
-                    >
-                      {monitor.enabled ? 'Pause' : 'Resume'}
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        )}
-      </section>
-
-      <AnimatePresence>
-        {toast ? (
-          <motion.div
-            className="toast"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            style={{
-              background:
-                toast.tone === 'success'
-                  ? 'linear-gradient(135deg, #1f6b44, #2d9a65)'
-                  : toast.tone === 'error'
-                  ? 'linear-gradient(135deg, #a12f2f, #d25454)'
-                  : undefined
-            }}
-          >
-            {toast.message}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-      <AnimatePresence>
-        {selectedMonitor ? (
-          <motion.div
-            className="detail-modal-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={closeDetail}
-          >
-            <motion.div
-              className="detail-modal"
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 24 }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <header className="detail-header">
-                <div>
-                  <h3>{selectedMonitor.name}</h3>
-                  <p>{selectedMonitor.url}</p>
-                </div>
-                <div className="detail-actions">
-                  <button
-                    className="ghost-button"
-                    onClick={triggerManualRun}
-                    disabled={runPending || !selectedMonitor.enabled}
-                  >
-                    {runPending ? 'Running...' : 'Run check now'}
-                  </button>
-                  <button className="ghost-button" onClick={closeDetail}>
-                    Close
-                  </button>
-                </div>
-              </header>
-              <div className="detail-grid">
-                <div className="detail-metric">
-                  <span className="metric-label">Status</span>
-                  <span
-                    className={classNames(
-                      'status-chip',
-                      !selectedMonitor.enabled
-                        ? 'paused'
-                        : selectedMonitor.last_outcome === 'up'
-                        ? 'up'
-                        : selectedMonitor.last_outcome === 'down'
-                        ? 'down'
-                        : 'idle'
-                    )}
-                  >
-                    {!selectedMonitor.enabled
-                      ? 'Paused'
-                      : selectedMonitor.last_outcome === 'up'
-                      ? 'Operational'
-                      : selectedMonitor.last_outcome === 'down'
-                      ? 'Down'
-                      : 'Pending'}
-                  </span>
-                </div>
-                <div className="detail-metric">
-                  <span className="metric-label">Last check</span>
-                  <strong>
-                    {!selectedMonitor.enabled && selectedMonitor.last_checked_at == null
-                      ? 'Paused'
-                      : formatDateTime(selectedMonitor.last_checked_at)}
-                  </strong>
-                </div>
-                <div className="detail-metric">
-                  <span className="metric-label">Latency</span>
-                  <strong>
-                    {selectedMonitor.last_latency_ms != null
-                      ? `${selectedMonitor.last_latency_ms} ms`
-                      : '—'}
-                  </strong>
-                </div>
-                <div className="detail-metric">
-                  <span className="metric-label">Next run</span>
-                  <strong>
-                    {!selectedMonitor.enabled ? 'Paused' : formatDateTime(selectedMonitor.next_run_at)}
-                  </strong>
-                </div>
-              </div>
-
-              <div className="detail-section">
-                <h4>Recent Checks</h4>
-                {checksLoading ? (
-                  <div className="empty-state">Loading recent checks...</div>
-                ) : checksError ? (
-                  <div className="empty-state">{checksError}</div>
-                ) : checks.length === 0 ? (
-                  <div className="empty-state">No check history yet. Please wait for the next run.</div>
-                ) : (
-                  <div className="check-log">
-                    {checks.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className={classNames(
-                          'check-log-row',
-                          expandedCheckId === entry.id ? 'active' : undefined
-                        )}
-                        onClick={() =>
-                          setExpandedCheckId((current) => (current === entry.id ? null : entry.id))
-                        }
-                      >
-                        <div className="check-row-heading">
-                          <span className="check-outcome">{entry.outcome.toUpperCase()}</span>
-                          <span className="check-time">{formatDateTime(entry.occurred_at)}</span>
-                        </div>
-                        <div className="check-meta">
-                          <span>
-                            {entry.latency_ms != null ? `${entry.latency_ms} ms` : '—'} ·{' '}
-                            {entry.status_code != null ? `HTTP ${entry.status_code}` : 'No response'}
-                          </span>
-                          {entry.error_message ? (
-                            <span className="check-error">{entry.error_message}</span>
-                          ) : null}
-                        </div>
-                        {expandedCheckId === entry.id ? (
-                          <div className="check-details">
-                            <div>
-                              <span className="detail-label">Recorded:</span> {formatDateTime(entry.occurred_at)}
-                            </div>
-                            <div>
-                              <span className="detail-label">Latency:</span>{' '}
-                              {entry.latency_ms != null ? `${entry.latency_ms} ms` : '—'}
-                            </div>
-                            <div>
-                              <span className="detail-label">Status:</span>{' '}
-                              {entry.status_code != null ? `HTTP ${entry.status_code}` : 'No response'}
-                            </div>
-                            {entry.error_message ? (
-                              <div>
-                                <span className="detail-label">Error:</span> {entry.error_message}
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+          ) : null}
+          <button className="nav-link" onClick={handleLogout}>
+            Logout
+          </button>
+        </div>
+      </nav>
+      <main className="app-main">
+        <Outlet />
+      </main>
     </div>
+  );
+}
+
+function AuthRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot" element={<ForgotPasswordPage />} />
+      <Route path="/reset" element={<ResetPasswordPage />} />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AppLayout />}>
+          <Route index element={<DashboardPage />} />
+          <Route element={<ProtectedRoute admin />}>
+            <Route path="admin" element={<AdminPage />} />
+          </Route>
+        </Route>
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AuthRoutes />
+      </AuthProvider>
+    </BrowserRouter>
   );
 }

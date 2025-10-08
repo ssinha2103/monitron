@@ -18,6 +18,7 @@ class Monitor(SQLModel, table=True):
     interval_seconds: int = Field(default=60)
     timeout_seconds: int = Field(default=10)
     enabled: bool = Field(default=True)
+    owner_id: Optional[int] = Field(default=None, foreign_key="users.id", index=True)
 
     next_run_at: datetime = Field(default_factory=utcnow, index=True)
     last_checked_at: Optional[datetime] = None

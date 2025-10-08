@@ -13,8 +13,14 @@ class Settings(BaseSettings):
     redis_url: str | None = Field(None, alias="REDIS_URL")
 
     jwt_secret_key: str = Field(..., alias="JWT_SECRET_KEY")
+    jwt_refresh_secret_key: str | None = Field(None, alias="JWT_REFRESH_SECRET_KEY")
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 720
+    access_token_expire_minutes: int = 60
+    refresh_token_expire_minutes: int = 60 * 24 * 7
+    reset_token_expire_minutes: int = 60
+
+    initial_admin_email: str | None = Field(None, alias="INITIAL_ADMIN_EMAIL")
+    initial_admin_password: str | None = Field(None, alias="INITIAL_ADMIN_PASSWORD")
 
     cors_origins: List[AnyHttpUrl] | List[str] = []
 

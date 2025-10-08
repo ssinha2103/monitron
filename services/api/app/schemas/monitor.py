@@ -42,6 +42,7 @@ class MonitorUpdate(BaseModel):
 
 class MonitorRead(MonitorBase):
     id: int
+    owner_id: Optional[int] = None
     next_run_at: datetime
     last_checked_at: Optional[datetime] = None
     last_status_code: Optional[int] = None
