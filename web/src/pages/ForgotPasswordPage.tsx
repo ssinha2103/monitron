@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { forgotPassword } from '../api';
+import { AuthLayout } from '../components/AuthLayout';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -24,11 +25,13 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <h2>Forgot password</h2>
-        <p className="auth-subtitle">Enter your email and we'll send reset instructions.</p>
-        <form className="auth-form" onSubmit={handleSubmit}>
+    <AuthLayout
+      title="Forgot password"
+      subtitle="We’ll email a secure link so you can choose a new password."
+      footer={<Link to="/login">Remembered it? Back to login</Link>}
+    >
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <div className="input-field">
           <label htmlFor="email">Email</label>
           <input
             id="email"
@@ -37,16 +40,13 @@ export default function ForgotPasswordPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          {error ? <div className="auth-error">{error}</div> : null}
-          {message ? <div className="auth-success">{message}</div> : null}
-          <button className="pill-button primary" type="submit" disabled={loading}>
-            {loading ? 'Sending…' : 'Send reset link'}
-          </button>
-        </form>
-        <div className="auth-footer">
-          <Link to="/login">Back to login</Link>
         </div>
-      </div>
-    </div>
+        {error ? <div className="auth-error">{error}</div> : null}
+        {message ? <div className="auth-success">{message}</div> : null}
+        <button className="pill-button primary auth-submit" type="submit" disabled={loading}>
+          {loading ? 'Sending…' : 'Send reset link'}
+        </button>
+      </form>
+    </AuthLayout>
   );
 }

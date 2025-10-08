@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { resetPassword } from '../api';
+import { AuthLayout } from '../components/AuthLayout';
 
 export default function ResetPasswordPage() {
   const [params] = useSearchParams();
@@ -30,13 +31,17 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <h2>Reset password</h2>
-        <p className="auth-subtitle">Enter the token from your email and choose a new password.</p>
-        <form className="auth-form" onSubmit={handleSubmit}>
+    <AuthLayout
+      title="Reset password"
+      subtitle="Paste the reset token we emailed you and choose a new password."
+      footer={<Link to="/login">Back to login</Link>}
+    >
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <div className="input-field">
           <label htmlFor="token">Reset token</label>
           <input id="token" value={token} onChange={(e) => setToken(e.target.value)} required />
+        </div>
+        <div className="input-field">
           <label htmlFor="password">New password</label>
           <input
             id="password"
@@ -46,16 +51,13 @@ export default function ResetPasswordPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
-          {error ? <div className="auth-error">{error}</div> : null}
-          {message ? <div className="auth-success">{message}</div> : null}
-          <button className="pill-button primary" type="submit" disabled={loading}>
-            {loading ? 'Updating…' : 'Update password'}
-          </button>
-        </form>
-        <div className="auth-footer">
-          <Link to="/login">Back to login</Link>
         </div>
-      </div>
-    </div>
+        {error ? <div className="auth-error">{error}</div> : null}
+        {message ? <div className="auth-success">{message}</div> : null}
+        <button className="pill-button primary auth-submit" type="submit" disabled={loading}>
+          {loading ? 'Updating…' : 'Update password'}
+        </button>
+      </form>
+    </AuthLayout>
   );
 }

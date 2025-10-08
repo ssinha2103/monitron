@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
+import { AuthLayout } from '../components/AuthLayout';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -25,17 +26,25 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <h2>Create account</h2>
-        <p className="auth-subtitle">Get started with uptime and cron monitoring.</p>
-        <form className="auth-form" onSubmit={handleSubmit}>
+    <AuthLayout
+      title="Create account"
+      subtitle="Monitor uptime, cron jobs, and incidents with a collaborative toolkit."
+      footer={
+        <div className="auth-footer-single">
+          Already have an account? <Link to="/login">Sign in</Link>
+        </div>
+      }
+    >
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <div className="input-field">
           <label htmlFor="fullName">Full name</label>
           <input
             id="fullName"
             value={form.fullName}
             onChange={(e) => setForm((prev) => ({ ...prev, fullName: e.target.value }))}
           />
+        </div>
+        <div className="input-field">
           <label htmlFor="email">Email</label>
           <input
             id="email"
@@ -45,6 +54,8 @@ export default function RegisterPage() {
             value={form.email}
             onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
           />
+        </div>
+        <div className="input-field">
           <label htmlFor="password">Password</label>
           <input
             id="password"
@@ -54,17 +65,12 @@ export default function RegisterPage() {
             value={form.password}
             onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
           />
-          {error ? <div className="auth-error">{error}</div> : null}
-          <button className="pill-button primary" type="submit" disabled={loading}>
-            {loading ? 'Creating…' : 'Create account'}
-          </button>
-        </form>
-        <div className="auth-footer">
-          <span>
-            Already have an account? <Link to="/login">Sign in</Link>
-          </span>
         </div>
-      </div>
-    </div>
+        {error ? <div className="auth-error">{error}</div> : null}
+        <button className="pill-button primary auth-submit" type="submit" disabled={loading}>
+          {loading ? 'Creating…' : 'Create account'}
+        </button>
+      </form>
+    </AuthLayout>
   );
 }
