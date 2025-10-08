@@ -17,7 +17,7 @@ export default function RegisterPage() {
     setError(null);
     try {
       await register({ email: form.email, password: form.password, full_name: form.fullName });
-      navigate('/');
+      navigate('/app');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to register');
     } finally {

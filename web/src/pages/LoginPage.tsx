@@ -1,15 +1,22 @@
-import { FormEvent, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { FormEvent, useMemo, useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
 import { AuthLayout } from '../components/AuthLayout';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const redirectPath = useMemo(() => {
+    const fromLocation = location.state && typeof location.state === 'object' && 'from' in location.state
+      ? (location.state as { from?: { pathname?: string } }).from
+      : undefined;
+    return fromLocation?.pathname ?? '/app';
+  }, [location.state]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -17,7 +24,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await login(form);
-      navigate('/');
+      navigate(redirectPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to login');
     } finally {

@@ -41,3 +41,9 @@ class MonitorCheck(SQLModel, table=True):
     status_code: Optional[int] = None
     latency_ms: Optional[int] = None
     error_message: Optional[str] = Field(default=None, max_length=1024)
+
+
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+
+    id: Optional[int] = Field(default=None, primary_key=True)

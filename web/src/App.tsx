@@ -9,6 +9,8 @@ import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 
+const DASHBOARD_PATH = '/app';
+
 function ProtectedRoute({ admin }: { admin?: boolean }) {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -22,7 +24,7 @@ function ProtectedRoute({ admin }: { admin?: boolean }) {
   }
 
   if (admin && user.role !== 'admin') {
-    return <Navigate to="/" replace />;
+    return <Navigate to={DASHBOARD_PATH} replace />;
   }
 
   return <Outlet />;
@@ -44,9 +46,9 @@ function AppLayout() {
           <span className="nav-logo">Monitron</span>
         </div>
         <div className="nav-right">
-          <button className="nav-link" onClick={() => navigate('/')}>Dashboard</button>
+          <button className="nav-link" onClick={() => navigate(DASHBOARD_PATH)}>Dashboard</button>
           {user?.role === 'admin' ? (
-            <button className="nav-link" onClick={() => navigate('/admin')}>
+            <button className="nav-link" onClick={() => navigate(`${DASHBOARD_PATH}/admin`)}>
               Admin
             </button>
           ) : null}
@@ -70,7 +72,7 @@ function AuthRoutes() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot" element={<ForgotPasswordPage />} />
       <Route path="/reset" element={<ResetPasswordPage />} />
-      <Route element={<ProtectedRoute />}>
+      <Route path={DASHBOARD_PATH} element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
           <Route element={<ProtectedRoute admin />}>
@@ -78,6 +80,7 @@ function AuthRoutes() {
           </Route>
         </Route>
       </Route>
+      <Route path="/admin" element={<Navigate to={`${DASHBOARD_PATH}/admin`} replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

@@ -22,7 +22,7 @@ export default function LandingPage() {
       </aside>
       <main className="landing-main">
         <header className="landing-header">
-          <div>
+          <div className="landing-content">
             <h1>Reliable monitoring for ambitious teams.</h1>
             <p>
               Keep APIs and cron jobs healthy with multi-region checks, intelligent alerting, and collaborative
