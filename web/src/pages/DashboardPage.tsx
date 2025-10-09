@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import {
@@ -10,6 +10,7 @@ import {
   runMonitor
 } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { Logo } from '../components/Logo';
 
 type Monitor = {
   id: number;
@@ -112,7 +113,9 @@ export default function DashboardPage() {
   const [checksLoading, setChecksLoading] = useState(false);
   const [checksError, setChecksError] = useState<string | null>(null);
   const [runPending, setRunPending] = useState(false);
+  const [actionLoading, setActionLoading] = useState<'runFailing' | 'resumePaused' | null>(null);
   const [expandedCheckId, setExpandedCheckId] = useState<number | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const showToast = (message: string, tone: Toast['tone'] = 'default') => {
     const id = Date.now();
@@ -138,6 +141,16 @@ export default function DashboardPage() {
   const selectedMonitor = useMemo(
     () => monitors.find((monitor) => monitor.id === selectedMonitorId) ?? null,
     [monitors, selectedMonitorId]
+  );
+
+  const failingMonitors = useMemo(
+    () => monitors.filter((monitor) => monitor.enabled && monitor.last_outcome === 'down'),
+    [monitors]
+  );
+
+  const pausedMonitors = useMemo(
+    () => monitors.filter((monitor) => !monitor.enabled),
+    [monitors]
   );
 
   useEffect(() => {
@@ -176,6 +189,45 @@ export default function DashboardPage() {
     setChecksError(null);
     setChecksLoading(false);
     setExpandedCheckId(null);
+  };
+
+  const focusCreateForm = () => {
+    setSelectedMonitorId(null);
+    setFormState(defaultFormState);
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      formRef.current?.querySelector<HTMLInputElement>('input#name')?.focus();
+    }, 50);
+  };
+
+  const handleRunFailingMonitors = async () => {
+    if (failingMonitors.length === 0) return;
+    setActionLoading('runFailing');
+    try {
+      await Promise.allSettled(failingMonitors.map((monitor) => runMonitor(monitor.id)));
+      showToast(`Triggered health checks for ${failingMonitors.length} monitor(s)`, 'success');
+      await loadMonitors();
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to trigger failing monitors', 'error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleResumePausedMonitors = async () => {
+    if (pausedMonitors.length === 0) return;
+    setActionLoading('resumePaused');
+    try {
+      await Promise.allSettled(pausedMonitors.map((monitor) => resumeMonitor(monitor.id)));
+      showToast(`Resumed ${pausedMonitors.length} monitor(s)`, 'success');
+      await loadMonitors();
+    } catch (err) {
+      console.error(err);
+      showToast('Unable to resume paused monitors', 'error');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   useEffect(() => {
@@ -237,18 +289,16 @@ export default function DashboardPage() {
     const total = monitors.length;
     const up = monitors.filter((m) => m.last_outcome === 'up').length;
     const down = monitors.filter((m) => m.last_outcome === 'down').length;
-    return { total, up, down };
+    const paused = monitors.filter((m) => !m.enabled).length;
+    return { total, up, down, paused };
   }, [monitors]);
 
   return (
     <div className="app-shell">
       <header className="top-bar">
         <div className="brand">
-          <div className="brand-icon">M</div>
-          <div>
-            <h1 style={{ fontSize: '24px' }}>Monitron Control Center</h1>
-            <p>Monitor your critical endpoints with confidence.</p>
-          </div>
+          <Logo orientation="horizontal" size={46} />
+          <p className="brand-tagline">Monitor your critical endpoints with confidence.</p>
         </div>
         <div className="top-actions">
           <span className="pill-button" style={{ pointerEvents: 'none', opacity: 0.75 }}>
@@ -278,8 +328,12 @@ export default function DashboardPage() {
                 <span className="metric-value">{stats.up}</span>
               </div>
               <div className="metric-card">
-                <span className="metric-label">Investigate</span>
+                <span className="metric-label">Failing</span>
                 <span className="metric-value">{stats.down}</span>
+              </div>
+              <div className="metric-card">
+                <span className="metric-label">Paused</span>
+                <span className="metric-value">{stats.paused}</span>
               </div>
             </div>
           </div>
@@ -287,14 +341,22 @@ export default function DashboardPage() {
 
         <aside className="actions-card">
           <span className="summary-header">Quick Actions</span>
-          <button className="action-button primary" onClick={() => setSelectedMonitorId(null)}>
+          <button className="action-button primary" onClick={focusCreateForm}>
             Add Monitor
           </button>
-          <button className="action-button secondary" disabled>
-            Import from JSON
+          <button
+            className="action-button secondary"
+            onClick={handleRunFailingMonitors}
+            disabled={failingMonitors.length === 0 || actionLoading === 'runFailing'}
+          >
+            {actionLoading === 'runFailing' ? 'Running…' : `Run failing (${failingMonitors.length})`}
           </button>
-          <button className="action-button ghost" disabled>
-            Download Report
+          <button
+            className="action-button ghost"
+            onClick={handleResumePausedMonitors}
+            disabled={pausedMonitors.length === 0 || actionLoading === 'resumePaused'}
+          >
+            {actionLoading === 'resumePaused' ? 'Resuming…' : `Resume paused (${pausedMonitors.length})`}
           </button>
         </aside>
       </section>
@@ -308,7 +370,7 @@ export default function DashboardPage() {
           <span className="badge">{stats.total} configured</span>
         </div>
 
-        <form className="monitor-form" onSubmit={handleSubmit}>
+        <form className="monitor-form" onSubmit={handleSubmit} ref={formRef}>
           <div className="form-grid">
             <div className="input-field">
               <label htmlFor="name">Monitor Name</label>
