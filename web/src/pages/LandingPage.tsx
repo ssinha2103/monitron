@@ -17,7 +17,6 @@ export default function LandingPage() {
           <a className="nav-pill">Analytics</a>
           <a className="nav-pill">Integrations</a>
           <a className="nav-pill">Pricing</a>
-          <a className="nav-pill">Docs</a>
         </nav>
       </aside>
       <main className="landing-main">
@@ -86,18 +85,6 @@ export default function LandingPage() {
               <span><span className="legend-dot legend-secondary" /> Cron runtime</span>
             </div>
           </div>
-
-          <div className="infocard">
-            <h3>Integrate in minutes</h3>
-            <p>
-              Send a heartbeat from any language, configure alerts with a visual builder, and connect Slack, Teams,
-              PagerDuty, Opsgenie, or custom webhooks.
-            </p>
-            <div className="code-preview">
-              <span>$ curl https://api.monitron.dev/heartbeat/xyz</span>
-              <span>&gt; Monitor updated • 202ms</span>
-            </div>
-          </div>
         </section>
 
         <footer className="landing-footer">
@@ -105,7 +92,6 @@ export default function LandingPage() {
           <div className="footer-links">
             <Link to="/login">Login</Link>
             <Link to="/register">Sign up</Link>
-            <a href="#docs">Docs</a>
           </div>
         </footer>
       </main>

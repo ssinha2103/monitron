@@ -89,6 +89,36 @@ export type ApiUser = {
   updated_at: string;
 };
 
+export type AdminOverview = {
+  generated_at: string;
+  users: {
+    total: number;
+    active: number;
+    admins: number;
+    new_last_7_days: number;
+  };
+  monitors: {
+    total: number;
+    active: number;
+    paused: number;
+    failing: number;
+    avg_latency_ms: number | null;
+  };
+  activity: {
+    checks_last_24h: number;
+    incidents_last_24h: number;
+  };
+  recent_users: ApiUser[];
+  top_failing_monitors: Array<{
+    id: number;
+    name: string;
+    url: string;
+    last_outcome?: string | null;
+    consecutive_failures: number;
+    owner_email?: string | null;
+  }>;
+};
+
 type LoginPayload = { email: string; password: string };
 
 type RegisterPayload = { email: string; password: string; full_name?: string };
@@ -179,9 +209,32 @@ export async function fetchUsers() {
   return apiRequest<ApiUser[]>('/admin/users');
 }
 
+export async function fetchAdminOverview() {
+  return apiRequest<AdminOverview>('/admin/overview');
+}
+
 export async function updateUser(id: number, payload: Record<string, unknown>) {
   return apiRequest<ApiUser>(`/admin/users/${id}`, {
     method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+}
+
+export type AdminInvitePayload = {
+  email: string;
+  full_name?: string;
+  role: 'user' | 'admin';
+  password?: string;
+};
+
+export type AdminInviteResponse = {
+  user: ApiUser;
+  temporary_password?: string | null;
+};
+
+export async function createUser(payload: AdminInvitePayload) {
+  return apiRequest<AdminInviteResponse>('/admin/users', {
+    method: 'POST',
     body: JSON.stringify(payload)
   });
 }
