@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
@@ -7,7 +7,7 @@ import { AuthLayout } from '../components/AuthLayout';
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, user, loading: authLoading } = useAuth();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -17,6 +17,12 @@ export default function LoginPage() {
       : undefined;
     return fromLocation?.pathname ?? '/app';
   }, [location.state]);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate(redirectPath, { replace: true });
+    }
+  }, [authLoading, user, navigate, redirectPath]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -31,6 +37,17 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (authLoading || user) {
+    return (
+      <AuthLayout
+        title="Welcome back"
+        subtitle="Sign in to manage uptime monitors, cron jobs, and instant alerts."
+      >
+        <div className="empty-state">Redirecting…</div>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout

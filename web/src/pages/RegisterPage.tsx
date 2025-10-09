@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
@@ -6,10 +6,16 @@ import { AuthLayout } from '../components/AuthLayout';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register, user, loading: authLoading } = useAuth();
   const [form, setForm] = useState({ email: '', password: '', fullName: '' });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate('/app', { replace: true });
+    }
+  }, [authLoading, user, navigate]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -24,6 +30,14 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
+
+  if (authLoading || user) {
+    return (
+      <AuthLayout title="Create account" subtitle="Monitor uptime, cron jobs, and incidents with a collaborative toolkit.">
+        <div className="empty-state">Redirecting…</div>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout

@@ -1,0 +1,40 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: "Build API"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        docker build \
+          -t "${_API_IMAGE:-${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}}" \
+          services/api
+
+  - name: gcr.io/cloud-builders/docker
+    id: "Build Worker"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        docker build \
+          -t "${_WORKER_IMAGE:-${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/worker:${SHORT_SHA}}" \
+          services/worker
+
+  - name: gcr.io/cloud-builders/docker
+    id: "Build Web"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        docker build \
+          -f web/Dockerfile.cloudrun \
+          -t "${_WEB_IMAGE:-${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/web:${SHORT_SHA}}" \
+          web
+
+images:
+  - "${_API_IMAGE:-${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}}"
+  - "${_WORKER_IMAGE:-${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/worker:${SHORT_SHA}}"
+  - "${_WEB_IMAGE:-${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/web:${SHORT_SHA}}"
+
+substitutions:
+  _REGION: us-central1
+  _REPO: monitron
