@@ -9,6 +9,7 @@ import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import { Logo } from './components/Logo';
+import { SiteFooter } from './components/SiteFooter';
 
 const DASHBOARD_PATH = '/app';
 
@@ -63,6 +64,7 @@ function AppLayout() {
       <main className="app-main">
         <Outlet />
       </main>
+      <SiteFooter className="app-footer" />
     </div>
   );
 }

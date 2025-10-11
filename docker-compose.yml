@@ -39,11 +39,30 @@ services:
       context: ./services/worker
     environment:
       DATABASE_URL: postgresql+psycopg2://monitron:monitron@db:5432/monitron
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - ./services/worker/app:/app/app:ro
+    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=5"]
+
+  scheduler:
+    build:
+      context: ./services/worker
+    environment:
+      DATABASE_URL: postgresql+psycopg2://monitron:monitron@db:5432/monitron
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./services/worker/app:/app/app:ro
+    command: ["python", "-m", "app.scheduler"]
 
   web:
     build:

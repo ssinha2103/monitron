@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 
 import { Logo } from '../components/Logo';
+import { SiteFooter } from '../components/SiteFooter';
 
 const analyticsMock = [
   { label: 'Monitors online', value: '328', trend: '+12 this week' },
@@ -91,13 +92,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <footer className="landing-footer">
-          <span>© {new Date().getFullYear()} Monitron Labs</span>
-          <div className="footer-links">
-            <Link to="/login">Login</Link>
-            <Link to="/register">Sign up</Link>
-          </div>
-        </footer>
+        <SiteFooter className="landing-footer" />
       </main>
     </div>
   );

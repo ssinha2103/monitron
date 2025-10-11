@@ -53,19 +53,19 @@ case "$cmd" in
   up)
     bring_up_infra
     init_db
-    "${COMPOSE[@]}" up --build api worker web
+    "${COMPOSE[@]}" up --build api worker scheduler web
     ;;
   up-d)
     bring_up_infra
     init_db
-    "${COMPOSE[@]}" up --build -d api worker web
+    "${COMPOSE[@]}" up --build -d api worker scheduler web
     ;;
   reup)
     "${COMPOSE[@]}" down --remove-orphans
     "${COMPOSE[@]}" build --no-cache
     bring_up_infra
     init_db
-    "${COMPOSE[@]}" up -d api worker web
+    "${COMPOSE[@]}" up -d api worker scheduler web
     ;;
   down)
     "${COMPOSE[@]}" down
