@@ -1,0 +1,147 @@
+name: Deploy to VM (GCE)
+
+on:
+  push:
+    branches:
+      - "master"
+      - "gcp_deploy"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH key
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_HOST: ${{ secrets.VM_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          echo "$VM_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+
+      - name: Test SSH Connection
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$VM_USER@$VM_HOST" "echo 'SSH connection successful!' && whoami && pwd"
+
+      - name: Deploy over SSH
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+          REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
+          VM_REPO_DIR: ${{ secrets.VM_REPO_DIR }}
+          MONITRON_POSTGRES_DB: ${{ secrets.VM_POSTGRES_DB }}
+          MONITRON_POSTGRES_USER: ${{ secrets.VM_POSTGRES_USER }}
+          MONITRON_POSTGRES_PASSWORD: ${{ secrets.VM_POSTGRES_PASSWORD }}
+          MONITRON_JWT_SECRET_KEY: ${{ secrets.VM_JWT_SECRET_KEY }}
+          MONITRON_JWT_REFRESH_SECRET_KEY: ${{ secrets.VM_JWT_REFRESH_SECRET_KEY }}
+          MONITRON_INITIAL_ADMIN_EMAIL: ${{ secrets.VM_INITIAL_ADMIN_EMAIL }}
+          MONITRON_INITIAL_ADMIN_PASSWORD: ${{ secrets.VM_INITIAL_ADMIN_PASSWORD }}
+          MONITRON_WEB_API_BASE_URL: ${{ secrets.VM_WEB_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$VM_USER@$VM_HOST" \
+            env \
+              REPO_TOKEN="$REPO_TOKEN" \
+              GITHUB_REPOSITORY="${{ github.repository }}" \
+              GITHUB_REF_NAME="${{ github.ref_name }}" \
+              GITHUB_SHA="${{ github.sha }}" \
+              VM_REPO_DIR="${VM_REPO_DIR:-}" \
+              MONITRON_AUTOGEN_ENV=1 \
+              MONITRON_POSTGRES_DB="${MONITRON_POSTGRES_DB:-}" \
+              MONITRON_POSTGRES_USER="${MONITRON_POSTGRES_USER:-}" \
+              MONITRON_POSTGRES_PASSWORD="${MONITRON_POSTGRES_PASSWORD:-}" \
+              MONITRON_JWT_SECRET_KEY="${MONITRON_JWT_SECRET_KEY:-}" \
+              MONITRON_JWT_REFRESH_SECRET_KEY="${MONITRON_JWT_REFRESH_SECRET_KEY:-}" \
+              MONITRON_INITIAL_ADMIN_EMAIL="${MONITRON_INITIAL_ADMIN_EMAIL:-}" \
+              MONITRON_INITIAL_ADMIN_PASSWORD="${MONITRON_INITIAL_ADMIN_PASSWORD:-}" \
+              MONITRON_WEB_API_BASE_URL="${MONITRON_WEB_API_BASE_URL:-}" \
+            bash -s <<'EOF'
+          set -euo pipefail
+
+          REPO_DIR=${VM_REPO_DIR:-/opt/monitron}
+          BRANCH_NAME=${GITHUB_REF_NAME:-master}
+          TARGET_REF=${GITHUB_SHA:-}
+
+          # Install Docker and Compose (Debian/Ubuntu)
+          if ! command -v docker >/dev/null 2>&1; then
+            if [ -f /etc/debian_version ]; then
+              sudo apt-get update -y
+              sudo apt-get install -y docker.io docker-compose-plugin git curl
+              sudo systemctl enable --now docker
+              sudo usermod -aG docker "$USER" || true
+            else
+              echo "Please install Docker manually for this distribution." >&2
+              exit 1
+            fi
+          fi
+
+          # Ensure Compose v1 fallback if plugin is missing
+          if ! command -v docker-compose >/dev/null 2>&1; then
+            if ! docker compose version >/dev/null 2>&1; then
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+            fi
+          fi
+
+          # Ensure repository directory exists and is owned by current user
+          sudo mkdir -p "$REPO_DIR"
+          sudo chown -R "$USER":"$USER" "$REPO_DIR"
+
+          if [ ! -d "$REPO_DIR/.git" ]; then
+            echo "Cloning repository..."
+            if [ -n "${REPO_TOKEN:-}" ]; then
+              git clone "https://${REPO_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$REPO_DIR"
+            else
+              git clone "git@github.com:${GITHUB_REPOSITORY}.git" "$REPO_DIR"
+            fi
+          fi
+
+          cd "$REPO_DIR"
+          git fetch --all --prune --tags
+
+          if git show-ref --verify --quiet "refs/heads/${BRANCH_NAME}"; then
+            git checkout "${BRANCH_NAME}"
+          else
+            git checkout -B "${BRANCH_NAME}" "origin/${BRANCH_NAME}"
+          fi
+
+          if [ -n "$TARGET_REF" ]; then
+            git reset --hard "$TARGET_REF"
+          else
+            git reset --hard "origin/${BRANCH_NAME}"
+          fi
+          git clean -fdx
+
+          MONITRON_POSTGRES_DB=${MONITRON_POSTGRES_DB:-monitron}
+          MONITRON_POSTGRES_USER=${MONITRON_POSTGRES_USER:-monitron}
+          MONITRON_POSTGRES_PASSWORD=${MONITRON_POSTGRES_PASSWORD:-}
+          MONITRON_JWT_SECRET_KEY=${MONITRON_JWT_SECRET_KEY:-}
+          MONITRON_JWT_REFRESH_SECRET_KEY=${MONITRON_JWT_REFRESH_SECRET_KEY:-}
+          MONITRON_INITIAL_ADMIN_EMAIL=${MONITRON_INITIAL_ADMIN_EMAIL:-admin@example.com}
+          MONITRON_INITIAL_ADMIN_PASSWORD=${MONITRON_INITIAL_ADMIN_PASSWORD:-}
+          MONITRON_WEB_API_BASE_URL=${MONITRON_WEB_API_BASE_URL:-http://localhost:8000/api/v1}
+
+          if [ -z "$MONITRON_POSTGRES_PASSWORD" ] || [ -z "$MONITRON_JWT_SECRET_KEY" ] || [ -z "$MONITRON_JWT_REFRESH_SECRET_KEY" ] || [ -z "$MONITRON_INITIAL_ADMIN_PASSWORD" ]; then
+            echo "Required secrets are missing. Ensure database/password and JWT secrets are set." >&2
+            exit 1
+          fi
+
+          export MONITRON_POSTGRES_DB MONITRON_POSTGRES_USER MONITRON_POSTGRES_PASSWORD
+          export MONITRON_JWT_SECRET_KEY MONITRON_JWT_REFRESH_SECRET_KEY
+          export MONITRON_INITIAL_ADMIN_EMAIL MONITRON_INITIAL_ADMIN_PASSWORD
+          export MONITRON_WEB_API_BASE_URL
+
+          bash deploy/remote-deploy.sh "${BRANCH_NAME}"
+          EOF

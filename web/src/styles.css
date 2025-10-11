@@ -1605,3 +1605,462 @@ button {
 .landing-brand .logo-wordmark small {
   font-size: 12px;
 }
+
+@media (max-width: 768px) {
+  .app-shell {
+    padding: 20px 16px 40px;
+  }
+
+  .app-nav {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 16px 20px;
+  }
+
+  .nav-right {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .nav-link {
+    flex: 1 1 120px;
+    text-align: center;
+  }
+
+  .top-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .top-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .top-actions .pill-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .dashboard-grid {
+    gap: 18px;
+  }
+
+  .summary-card,
+  .actions-card,
+  .monitor-panel {
+    padding: 20px;
+  }
+
+  .metrics-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actions-card .action-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .badge {
+    align-self: flex-start;
+  }
+
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .form-grid > .input-field {
+    grid-column: auto !important;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .form-actions .pill-button,
+  .form-actions .ghost-button {
+    width: 100%;
+  }
+
+  .monitor-card {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 18px;
+    gap: 14px;
+  }
+
+  .status-chip-row {
+    justify-content: flex-start;
+  }
+
+  .actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .actions .ghost-button {
+    width: 100%;
+  }
+
+  .toast {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+  }
+
+  .detail-modal-backdrop {
+    padding: 48px 16px 24px;
+    align-items: flex-start;
+  }
+
+  .detail-modal {
+    padding: 24px;
+    border-radius: 22px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .detail-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .detail-actions .ghost-button,
+  .detail-actions .pill-button {
+    width: 100%;
+  }
+
+  .detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing-sidebar {
+    margin: 16px;
+    padding: 16px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .landing-sidebar nav {
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .landing-sidebar nav .nav-pill {
+    flex: none;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .landing-main {
+    padding: 32px 16px;
+  }
+
+  .landing-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 24px;
+  }
+
+  .landing-content h1 {
+    font-size: 36px;
+  }
+
+  .landing-cta {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .landing-cta .pill-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .landing-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .hero-card,
+  .snapshot-card {
+    grid-column: auto;
+  }
+
+  .hero-card {
+    padding: 24px;
+  }
+
+  .snapshot-card {
+    padding: 20px;
+  }
+
+  .snapshot-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chart-card {
+    padding: 20px;
+  }
+
+  .landing-footer {
+    padding: 24px 16px 32px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .footer-links {
+    flex-wrap: wrap;
+  }
+
+  .auth-shell {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .auth-hero {
+    padding: 48px 24px;
+    justify-content: flex-start;
+  }
+
+  .auth-hero-content {
+    max-width: none;
+  }
+
+  .auth-hero h1 {
+    font-size: 30px;
+  }
+
+  .hero-meta {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .hero-meta .metric {
+    flex: 1 1 120px;
+  }
+
+  .auth-card {
+    max-width: 100%;
+    width: calc(100% - 32px);
+    margin: 0 16px 32px;
+    border-radius: 28px;
+    padding: 32px 24px;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .auth-card::before {
+    border-radius: 28px;
+  }
+
+  .auth-backlink {
+    text-align: center;
+  }
+
+  .admin-page {
+    padding: 24px 16px 48px;
+  }
+
+  .admin-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .admin-toolbar {
+    justify-content: flex-start;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .admin-search {
+    flex: 1 1 100%;
+  }
+
+  .admin-search input {
+    width: 100%;
+  }
+
+  .admin-filters {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .admin-filters select {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .admin-overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-content-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-table {
+    border-radius: 22px;
+  }
+
+  .admin-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .admin-row-header {
+    display: none;
+  }
+
+  .admin-row:not(.admin-row-header) > span {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .admin-row:not(.admin-row-header) > span::before {
+    content: attr(data-label);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--neutral-500);
+    font-weight: 600;
+    display: block;
+  }
+
+  .admin-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .admin-actions .ghost-button {
+    width: 100%;
+  }
+
+  .admin-panel {
+    padding: 20px;
+  }
+
+  .admin-sidepanels {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-nav {
+    padding: 16px;
+    gap: 10px;
+  }
+
+  .nav-link {
+    flex: 1 1 100%;
+  }
+
+  .brand {
+    align-items: flex-start;
+  }
+
+  .summary-card,
+  .actions-card,
+  .monitor-panel {
+    padding: 18px;
+  }
+
+  .monitor-card {
+    padding: 16px;
+  }
+
+  .landing-sidebar {
+    margin: 12px;
+    padding: 14px;
+  }
+
+  .landing-content h1 {
+    font-size: 30px;
+  }
+
+  .hero-card {
+    padding: 20px;
+  }
+
+  .snapshot-card,
+  .chart-card {
+    padding: 18px;
+  }
+
+  .landing-footer {
+    padding: 20px 12px 28px;
+  }
+
+  .auth-hero {
+    padding: 40px 20px;
+  }
+
+  .auth-hero h1 {
+    font-size: 26px;
+  }
+
+  .hero-meta .metric {
+    flex: 1 1 100%;
+  }
+
+  .auth-card {
+    width: calc(100% - 24px);
+    margin: 0 12px 28px;
+    padding: 28px 20px;
+  }
+
+  .admin-page {
+    padding: 20px 12px 40px;
+  }
+
+  .admin-toolbar {
+    gap: 8px;
+  }
+
+  .admin-filters {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .admin-row {
+    padding: 14px;
+  }
+
+  .admin-row:not(.admin-row-header) > span::before {
+    font-size: 10px;
+  }
+
+  .toast {
+    bottom: 12px;
+  }
+}
