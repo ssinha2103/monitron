@@ -1,4 +1,4 @@
-import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, BrowserRouter } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, BrowserRouter, Link } from 'react-router-dom';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import DashboardPage from './pages/DashboardPage';
@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import { Logo } from './components/Logo';
 
 const DASHBOARD_PATH = '/app';
 
@@ -43,7 +44,9 @@ function AppLayout() {
     <div className="app-frame">
       <nav className="app-nav">
         <div className="nav-left">
-          <span className="nav-logo">Monitron</span>
+          <Link to="/" className="nav-logo">
+            <Logo orientation="vertical" />
+          </Link>
         </div>
         <div className="nav-right">
           <button className="nav-link" onClick={() => navigate(DASHBOARD_PATH)}>Dashboard</button>
@@ -67,7 +70,7 @@ function AppLayout() {
 function AuthRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<LandingGate />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot" element={<ForgotPasswordPage />} />
@@ -84,6 +87,20 @@ function AuthRoutes() {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
+}
+
+function LandingGate() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div className="empty-state">Loading…</div>;
+  }
+
+  if (user) {
+    return <Navigate to={DASHBOARD_PATH} replace />;
+  }
+
+  return <LandingPage />;
 }
 
 export default function App() {

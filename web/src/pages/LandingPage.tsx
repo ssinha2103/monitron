@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 
+import { Logo } from '../components/Logo';
+
 const analyticsMock = [
   { label: 'Monitors online', value: '328', trend: '+12 this week' },
   { label: 'Incidents resolved', value: '96%', trend: 'Avg MTTR 11m' },
@@ -11,7 +13,9 @@ export default function LandingPage() {
   return (
     <div className="landing-shell">
       <aside className="landing-sidebar">
-        <div className="brand-mark">Monitron</div>
+        <Link to="/" className="brand-logo landing-brand">
+          <Logo orientation="vertical" size={42} />
+        </Link>
         <nav>
           <a className="nav-pill active">Overview</a>
           <a className="nav-pill">Analytics</a>

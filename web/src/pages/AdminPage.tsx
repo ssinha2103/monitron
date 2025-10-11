@@ -238,20 +238,20 @@ export default function AdminPage() {
               ) : (
                 filteredUsers.map((item) => (
                   <div key={item.id} className="admin-row">
-                    <span>{item.email}</span>
-                    <span>{item.full_name ?? '—'}</span>
-                    <span>
+                    <span data-label="Email">{item.email}</span>
+                    <span data-label="Name">{item.full_name ?? '—'}</span>
+                    <span data-label="Role">
                       <span className={`admin-chip ${item.role === 'admin' ? 'chip-admin' : 'chip-user'}`}>
                         {item.role}
                       </span>
                     </span>
-                    <span>
+                    <span data-label="Status">
                       <span className={`admin-chip ${item.is_active ? 'chip-success' : 'chip-danger'}`}>
                         {item.is_active ? 'Active' : 'Suspended'}
                       </span>
                     </span>
-                    <span>{new Date(item.created_at).toLocaleDateString()}</span>
-                    <span className="admin-actions">
+                    <span data-label="Created">{new Date(item.created_at).toLocaleDateString()}</span>
+                    <span data-label="Actions" className="admin-actions">
                       <button
                         className="ghost-button"
                         disabled={item.id === user.id}
