@@ -125,18 +125,40 @@ export default function DashboardPage() {
     }, 4000);
   };
 
-  const loadMonitors = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data: Monitor[] = await fetchMonitors();
-      setMonitors(data);
-    } catch (err) {
-      console.error(err);
-      setError('Unable to load monitors. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadMonitors = useCallback(
+    async ({ background = false }: { background?: boolean } = {}) => {
+      if (!user) {
+        setMonitors([]);
+        setError(null);
+        if (!background) {
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (!background) {
+        setLoading(true);
+        setError(null);
+      }
+
+      try {
+        const data: Monitor[] = await fetchMonitors();
+        const scoped = data.filter((monitor) => monitor.owner_id === user.id);
+        setMonitors(scoped);
+        setError(null);
+      } catch (err) {
+        console.error(err);
+        if (!background) {
+          setError('Unable to load monitors. Please try again.');
+        }
+      } finally {
+        if (!background) {
+          setLoading(false);
+        }
+      }
+    },
+    [user]
+  );
 
   const selectedMonitor = useMemo(
     () => monitors.find((monitor) => monitor.id === selectedMonitorId) ?? null,
@@ -154,12 +176,17 @@ export default function DashboardPage() {
   );
 
   useEffect(() => {
+    if (!user) {
+      setMonitors([]);
+      return;
+    }
+
     void loadMonitors();
     const interval = setInterval(() => {
-      void loadMonitors();
+      void loadMonitors({ background: true });
     }, 15_000);
     return () => clearInterval(interval);
-  }, [loadMonitors]);
+  }, [user, loadMonitors]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
