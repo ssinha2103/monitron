@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import {
@@ -7,7 +7,8 @@ import {
   fetchMonitors,
   pauseMonitor,
   resumeMonitor,
-  runMonitor
+  runMonitor,
+  updateMonitor
 } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { Logo } from '../components/Logo';
@@ -42,6 +43,13 @@ type MonitorCheck = {
 const defaultFormState = {
   name: '',
   url: '',
+  method: 'GET',
+  interval_seconds: 60,
+  timeout_seconds: 10
+};
+
+const defaultEditState = {
+  name: '',
   method: 'GET',
   interval_seconds: 60,
   timeout_seconds: 10
@@ -116,6 +124,11 @@ export default function DashboardPage() {
   const [actionLoading, setActionLoading] = useState<'runFailing' | 'resumePaused' | null>(null);
   const [expandedCheckId, setExpandedCheckId] = useState<number | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [editFormState, setEditFormState] = useState(defaultEditState);
 
   const showToast = (message: string, tone: Toast['tone'] = 'default') => {
     const id = Date.now();
@@ -188,6 +201,24 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [user, loadMonitors]);
 
+  useEffect(() => {
+    if (!selectedMonitor) {
+      setIsEditing(false);
+      setEditSubmitting(false);
+      setEditFormState(defaultEditState);
+      return;
+    }
+
+    setEditFormState({
+      name: selectedMonitor.name,
+      method: selectedMonitor.method,
+      interval_seconds: selectedMonitor.interval_seconds,
+      timeout_seconds: selectedMonitor.timeout_seconds
+    });
+    setIsEditing(false);
+    setEditSubmitting(false);
+  }, [selectedMonitor]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
@@ -205,9 +236,54 @@ export default function DashboardPage() {
     }
   };
 
+  const handleEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedMonitor) return;
+    setEditSubmitting(true);
+    try {
+      const payload = {
+        name: editFormState.name.trim(),
+        method: editFormState.method,
+        interval_seconds: Math.max(30, editFormState.interval_seconds),
+        timeout_seconds: Math.min(Math.max(1, editFormState.timeout_seconds), 60)
+      };
+      const response = (await updateMonitor(selectedMonitor.id, payload)) as Monitor | undefined;
+      const updated: Monitor = response ?? { ...selectedMonitor, ...payload };
+      setMonitors((prev) =>
+        prev.map((monitor) => (monitor.id === updated.id ? { ...monitor, ...updated } : monitor))
+      );
+      setIsEditing(false);
+      showToast('Monitor updated', 'success');
+      setEditFormState({
+        name: updated.name,
+        method: updated.method,
+        interval_seconds: updated.interval_seconds,
+        timeout_seconds: updated.timeout_seconds
+      });
+      await loadMonitors({ background: true });
+    } catch (err) {
+      console.error(err);
+      showToast(err instanceof Error ? err.message : 'Failed to update monitor', 'error');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
   const handleMonitorClick = (monitorId: number) => {
     setSelectedMonitorId(monitorId);
     setExpandedCheckId(null);
+  };
+
+  const toggleEditMode = () => {
+    if (!selectedMonitor) return;
+    setEditFormState({
+      name: selectedMonitor.name,
+      method: selectedMonitor.method,
+      interval_seconds: selectedMonitor.interval_seconds,
+      timeout_seconds: selectedMonitor.timeout_seconds
+    });
+    setIsEditing((prev) => !prev);
+    setEditSubmitting(false);
   };
 
   const closeDetail = () => {
@@ -301,7 +377,7 @@ export default function DashboardPage() {
     try {
       const result = await runMonitor(selectedMonitorId);
       showToast('Check executed', 'success');
-      setChecks((prev) => [result, ...prev]);
+        setChecks((prev) => [result, ...prev]);
       setExpandedCheckId(result.id);
       await loadMonitors();
     } catch (err) {
@@ -309,6 +385,264 @@ export default function DashboardPage() {
       showToast(err instanceof Error ? err.message : 'Failed to run check', 'error');
     } finally {
       setRunPending(false);
+    }
+  };
+
+  const exportableMonitors = useMemo(
+    () =>
+      monitors.map((monitor) => ({
+        name: monitor.name,
+        url: monitor.url,
+        method: monitor.method,
+        interval_seconds: monitor.interval_seconds,
+        timeout_seconds: monitor.timeout_seconds,
+        enabled: monitor.enabled
+      })),
+    [monitors]
+  );
+
+  const downloadFile = (content: string, filename: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const escapeCsv = (value: string | number | boolean) => {
+    const raw =
+      typeof value === 'boolean' ? String(value) : typeof value === 'number' ? String(value) : value ?? '';
+    const needsQuoting = /[",\n]/.test(raw);
+    return needsQuoting ? `"${raw.replace(/"/g, '""')}"` : raw;
+  };
+
+  const handleExport = (format: 'json' | 'csv') => {
+    if (exportableMonitors.length === 0) {
+      showToast('No monitors to export', 'error');
+      return;
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    if (format === 'json') {
+      downloadFile(
+        JSON.stringify(exportableMonitors, null, 2),
+        `monitors-${timestamp}.json`,
+        'application/json'
+      );
+      showToast('Exported monitors as JSON', 'success');
+      return;
+    }
+
+    const header = 'name,url,method,interval_seconds,timeout_seconds,enabled';
+    const rows = exportableMonitors.map((monitor) =>
+      [
+        escapeCsv(monitor.name),
+        escapeCsv(monitor.url),
+        escapeCsv(monitor.method),
+        escapeCsv(monitor.interval_seconds),
+        escapeCsv(monitor.timeout_seconds),
+        escapeCsv(monitor.enabled)
+      ].join(',')
+    );
+    downloadFile([header, ...rows].join('\n'), `monitors-${timestamp}.csv`, 'text/csv');
+    showToast('Exported monitors as CSV', 'success');
+  };
+
+  const parseCsvLine = (line: string): string[] => {
+    const cells: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        cells.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    cells.push(current.trim());
+    return cells;
+  };
+
+  const parseCsvImport = (text: string) => {
+    const lines = text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    if (lines.length === 0) return [];
+
+    const headers = parseCsvLine(lines[0]).map((header) => header.toLowerCase());
+    const idxName = headers.indexOf('name');
+    const idxUrl = headers.indexOf('url');
+
+    if (idxName === -1 || idxUrl === -1) {
+      throw new Error('CSV must include "name" and "url" columns.');
+    }
+
+    const idxMethod = headers.indexOf('method');
+    const idxInterval = headers.indexOf('interval_seconds');
+    const idxTimeout = headers.indexOf('timeout_seconds');
+    const idxEnabled = headers.indexOf('enabled');
+
+    return lines.slice(1).map((line, rowIndex) => {
+      const cells = parseCsvLine(line);
+      const name = (cells[idxName] ?? '').trim();
+      const url = (cells[idxUrl] ?? '').trim();
+
+      if (!name || !url) {
+        throw new Error(`Row ${rowIndex + 2} is missing required values.`);
+      }
+
+      const method = (idxMethod >= 0 ? cells[idxMethod] : 'GET').trim().toUpperCase() || 'GET';
+      const interval = Number.parseInt(idxInterval >= 0 ? cells[idxInterval] : '', 10);
+      const timeout = Number.parseInt(idxTimeout >= 0 ? cells[idxTimeout] : '', 10);
+      const enabledRaw = idxEnabled >= 0 ? (cells[idxEnabled] ?? '').trim().toLowerCase() : '';
+
+      return {
+        name,
+        url,
+        method,
+        interval_seconds: Number.isFinite(interval) && interval > 0 ? interval : 60,
+        timeout_seconds: Number.isFinite(timeout) && timeout > 0 ? timeout : 10,
+        enabled:
+          enabledRaw === ''
+            ? true
+            : enabledRaw === 'true' || enabledRaw === '1' || enabledRaw === 'yes' || enabledRaw === 'y'
+      };
+    });
+  };
+
+  const parseJsonImport = (text: string) => {
+    const payload = JSON.parse(text);
+    if (!Array.isArray(payload)) {
+      throw new Error('JSON import must be an array of monitors.');
+    }
+
+    return payload.map((entry, index) => {
+      if (!entry || typeof entry !== 'object') {
+        throw new Error(`Invalid monitor entry at index ${index}.`);
+      }
+
+      const name = typeof entry.name === 'string' ? entry.name.trim() : '';
+      const url = typeof entry.url === 'string' ? entry.url.trim() : '';
+      if (!name || !url) {
+        throw new Error(`Monitor at index ${index} is missing "name" or "url".`);
+      }
+
+      const method =
+        typeof entry.method === 'string' && entry.method.trim()
+          ? entry.method.trim().toUpperCase()
+          : 'GET';
+      const interval = Number(entry.interval_seconds);
+      const timeout = Number(entry.timeout_seconds);
+      const enabledValue = entry.enabled;
+
+      return {
+        name,
+        url,
+        method,
+        interval_seconds: Number.isFinite(interval) && interval > 0 ? interval : 60,
+        timeout_seconds: Number.isFinite(timeout) && timeout > 0 ? timeout : 10,
+        enabled:
+          typeof enabledValue === 'boolean'
+            ? enabledValue
+            : enabledValue == null
+            ? true
+            : ['true', '1', 'yes', 'y'].includes(String(enabledValue).toLowerCase())
+      };
+    });
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      let records: Array<{
+        name: string;
+        url: string;
+        method: string;
+        interval_seconds: number;
+        timeout_seconds: number;
+        enabled: boolean;
+      }> = [];
+
+      if (extension === 'csv') {
+        records = parseCsvImport(text);
+      } else if (extension === 'json') {
+        records = parseJsonImport(text);
+      } else if (text.trim().startsWith('[')) {
+        records = parseJsonImport(text);
+      } else {
+        throw new Error('Unsupported file format. Please use .json or .csv.');
+      }
+
+      if (records.length === 0) {
+        showToast('No monitors found in the import file.', 'error');
+        return;
+      }
+
+      let created = 0;
+      const failures: string[] = [];
+
+      for (const monitor of records) {
+        try {
+          await createMonitor({
+            name: monitor.name,
+            url: monitor.url,
+            method: monitor.method,
+            interval_seconds: monitor.interval_seconds,
+            timeout_seconds: monitor.timeout_seconds,
+            enabled: monitor.enabled
+          });
+          created += 1;
+        } catch (error) {
+          console.error(error);
+          failures.push(monitor.name || monitor.url);
+        }
+      }
+
+      if (created > 0) {
+        showToast(`Imported ${created} monitor${created === 1 ? '' : 's'}`, 'success');
+        await loadMonitors({ background: true });
+      }
+
+      if (failures.length > 0) {
+        showToast(
+          `Failed to import ${failures.length} monitor${failures.length === 1 ? '' : 's'}: ${failures.join(
+            ', '
+          )}`,
+          'error'
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      showToast(err instanceof Error ? err.message : 'Import failed', 'error');
+    } finally {
+      setImporting(false);
+      if (event.target) {
+        event.target.value = '';
+      }
     }
   };
 
@@ -394,7 +728,43 @@ export default function DashboardPage() {
             <h2>Active Monitors</h2>
             <p>Browse, filter, and manage uptime checks with a polished interface.</p>
           </div>
-          <span className="badge">{stats.total} configured</span>
+          <div
+            className="panel-header-actions"
+            style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}
+          >
+            <span className="badge">{stats.total} configured</span>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => handleExport('json')}
+              disabled={exportableMonitors.length === 0}
+            >
+              Export JSON
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => handleExport('csv')}
+              disabled={exportableMonitors.length === 0}
+            >
+              Export CSV
+            </button>
+            <button
+              type="button"
+              className="ghost-button primary"
+              onClick={handleImportClick}
+              disabled={importing}
+            >
+              {importing ? 'Importing…' : 'Import'}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,.csv,application/json,text/csv"
+              style={{ display: 'none' }}
+              onChange={handleImportFile}
+            />
+          </div>
         </div>
 
         <form className="monitor-form" onSubmit={handleSubmit} ref={formRef}>
@@ -614,6 +984,9 @@ export default function DashboardPage() {
                   <p>{selectedMonitor.url}</p>
                 </div>
                 <div className="detail-actions">
+                  <button className="ghost-button" onClick={toggleEditMode}>
+                    {isEditing ? 'Cancel edit' : 'Edit monitor'}
+                  </button>
                   <button
                     className="ghost-button"
                     onClick={triggerManualRun}
@@ -626,53 +999,128 @@ export default function DashboardPage() {
                   </button>
                 </div>
               </header>
-              <div className="detail-grid">
-                <div className="detail-metric">
-                  <span className="metric-label">Status</span>
-                  <span
-                    className={classNames(
-                      'status-chip',
-                      !selectedMonitor.enabled
-                        ? 'paused'
+              {isEditing ? (
+                <form className="monitor-form" onSubmit={handleEditSubmit}>
+                  <div className="form-grid">
+                    <div className="input-field">
+                      <label htmlFor="edit-name">Monitor Name</label>
+                      <input
+                        id="edit-name"
+                        value={editFormState.name}
+                        onChange={(event) =>
+                          setEditFormState((prev) => ({ ...prev, name: event.target.value }))
+                        }
+                        required
+                      />
+                    </div>
+                    <div className="input-field" style={{ gridColumn: 'span 2' }}>
+                      <label htmlFor="edit-url">Target URL</label>
+                      <input id="edit-url" value={selectedMonitor.url} disabled />
+                    </div>
+                    <div className="input-field">
+                      <label htmlFor="edit-method">Method</label>
+                      <select
+                        id="edit-method"
+                        value={editFormState.method}
+                        onChange={(event) =>
+                          setEditFormState((prev) => ({ ...prev, method: event.target.value }))
+                        }
+                      >
+                        <option value="GET">GET</option>
+                        <option value="HEAD">HEAD</option>
+                        <option value="POST">POST</option>
+                      </select>
+                    </div>
+                    <div className="input-field">
+                      <label htmlFor="edit-interval">Interval (seconds)</label>
+                      <input
+                        id="edit-interval"
+                        type="number"
+                        min={30}
+                        value={editFormState.interval_seconds}
+                        onChange={(event) =>
+                          setEditFormState((prev) => ({
+                            ...prev,
+                            interval_seconds: Number.parseInt(event.target.value, 10) || prev.interval_seconds
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="input-field">
+                      <label htmlFor="edit-timeout">Timeout (seconds)</label>
+                      <input
+                        id="edit-timeout"
+                        type="number"
+                        min={1}
+                        max={60}
+                        value={editFormState.timeout_seconds}
+                        onChange={(event) =>
+                          setEditFormState((prev) => ({
+                            ...prev,
+                            timeout_seconds: Number.parseInt(event.target.value, 10) || prev.timeout_seconds
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="form-actions">
+                    <button className="ghost-button" type="button" onClick={toggleEditMode}>
+                      Cancel
+                    </button>
+                    <button className="pill-button primary" type="submit" disabled={editSubmitting}>
+                      {editSubmitting ? 'Saving…' : 'Save changes'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="detail-grid">
+                  <div className="detail-metric">
+                    <span className="metric-label">Status</span>
+                    <span
+                      className={classNames(
+                        'status-chip',
+                        !selectedMonitor.enabled
+                          ? 'paused'
+                          : selectedMonitor.last_outcome === 'up'
+                          ? 'up'
+                          : selectedMonitor.last_outcome === 'down'
+                          ? 'down'
+                          : 'idle'
+                      )}
+                    >
+                      {!selectedMonitor.enabled
+                        ? 'Paused'
                         : selectedMonitor.last_outcome === 'up'
-                        ? 'up'
+                        ? 'Operational'
                         : selectedMonitor.last_outcome === 'down'
-                        ? 'down'
-                        : 'idle'
-                    )}
-                  >
-                    {!selectedMonitor.enabled
-                      ? 'Paused'
-                      : selectedMonitor.last_outcome === 'up'
-                      ? 'Operational'
-                      : selectedMonitor.last_outcome === 'down'
-                      ? 'Down'
-                      : 'Pending'}
-                  </span>
+                        ? 'Down'
+                        : 'Pending'}
+                    </span>
+                  </div>
+                  <div className="detail-metric">
+                    <span className="metric-label">Last check</span>
+                    <strong>
+                      {!selectedMonitor.enabled && selectedMonitor.last_checked_at == null
+                        ? 'Paused'
+                        : formatDateTime(selectedMonitor.last_checked_at)}
+                    </strong>
+                  </div>
+                  <div className="detail-metric">
+                    <span className="metric-label">Latency</span>
+                    <strong>
+                      {selectedMonitor.last_latency_ms != null
+                        ? `${selectedMonitor.last_latency_ms} ms`
+                        : '—'}
+                    </strong>
+                  </div>
+                  <div className="detail-metric">
+                    <span className="metric-label">Next run</span>
+                    <strong>
+                      {!selectedMonitor.enabled ? 'Paused' : formatDateTime(selectedMonitor.next_run_at)}
+                    </strong>
+                  </div>
                 </div>
-                <div className="detail-metric">
-                  <span className="metric-label">Last check</span>
-                  <strong>
-                    {!selectedMonitor.enabled && selectedMonitor.last_checked_at == null
-                      ? 'Paused'
-                      : formatDateTime(selectedMonitor.last_checked_at)}
-                  </strong>
-                </div>
-                <div className="detail-metric">
-                  <span className="metric-label">Latency</span>
-                  <strong>
-                    {selectedMonitor.last_latency_ms != null
-                      ? `${selectedMonitor.last_latency_ms} ms`
-                      : '—'}
-                  </strong>
-                </div>
-                <div className="detail-metric">
-                  <span className="metric-label">Next run</span>
-                  <strong>
-                    {!selectedMonitor.enabled ? 'Paused' : formatDateTime(selectedMonitor.next_run_at)}
-                  </strong>
-                </div>
-              </div>
+              )}
 
               <div className="detail-section">
                 <h4>Recent Checks</h4>
