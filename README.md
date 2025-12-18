@@ -9,6 +9,7 @@ Monitron keeps an eye on your APIs and scheduled jobs, aggregates health data, a
 - Multi-endpoint monitor management with adjustable intervals, methods, and timeouts.
 - Real-time health tracking with automatic jittering to smooth load on targets.
 - One-click "run now" checks and historical audit trail per monitor.
+- Intelligent downtime escalation with rapid retry cadence and sustained outage alerts.
 - Initial admin bootstrap via environment variables for quick onboarding.
 - Async task pipeline (Celery + Redis) that scales safely under heavy load.
 
@@ -88,6 +89,13 @@ Populate `.env` (used by both Docker and local tooling) with:
 | `JWT_SECRET_KEY` / `JWT_REFRESH_SECRET_KEY` | Secrets for access/refresh token signing. |
 | `INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD` | Seed credentials created during first boot. |
 | `VITE_API_BASE_URL` | Base path the web front-end uses when proxying API calls. |
+| `ALERT_EMAIL_FROM` | Sender address used for sustained downtime notifications. |
+| `SMTP_HOST` / `SMTP_PORT` | SMTP server host and port for alert delivery. |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | Optional credentials for authenticated SMTP. |
+| `SMTP_USE_TLS` / `SMTP_USE_SSL` | Toggle STARTTLS vs SSL for SMTP connections. |
+| `SMTP_TIMEOUT` | Timeout (seconds) for SMTP connections. |
+| `SUSTAINED_DOWN_THRESHOLD` | Number of failed checks within the window before alerting. |
+| `SUSTAINED_DOWN_WINDOW_MINUTES` | Sliding window (minutes) used when counting failed checks. |
 
 > **Heads-up:** The Celery worker and scheduler require `REDIS_URL` to be reachable; keep it aligned across `.env`, `docker-compose.yml`, and your runtime environment.
 
